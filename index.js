@@ -158,24 +158,9 @@ export class BigNumber {
     if (eCache.scale >= precision) {
       return eCache.roundToPrecision(precision);
     }
-  
-    // 2) We'll compute e = 2^(1/ln(2)) at a higher internal precision
-    const workingPrecision = precision + 10;
-  
-    // 3) Get 1/ln(2) at the working precision
-    const one = new BigNumber("1");
-    const two = new BigNumber("2");
-    const oneOverLn2 = one.divide(this.ln2(workingPrecision), workingPrecision);
-  
-    // 4) Raise 2 to that power
-    //    2^(1/ln(2)) = e
-    const eApprox = two.pow(oneOverLn2, workingPrecision);
-  
-    // 5) Update our cache if this is the highest precision we’ve computed
-    eCache = eApprox;
-  
-    // 6) Finally, return it rounded to the requested precision
-    return eApprox.roundToPrecision(precision);
+    const e = BigNumber.exp(new BigNumber("1"), precision);
+    eCache = e;
+    return e;
   }
   // Natural logarithm using Taylor series
   ln(precision = 50) {
@@ -377,19 +362,20 @@ export class BigNumber {
 
   // Exponential function using Taylor series
   static exp(x, precision = 20) {
+    let workingPrecision = precision + 10;
     // e^x = 1 + x + x^2/2! + x^3/3! + ...
     let sum = new BigNumber("1");
     let term = new BigNumber("1");
 
     for (let i = 1; i < precision * 2; i++) {
-      term = term.multiply(x).divide(new BigNumber(i.toString()), precision);
+      term = term.multiply(x).divide(new BigNumber(i.toString()), workingPrecision);
       sum = sum.add(term);
 
       // Check for convergence
       if (term.isZero()) break;
     }
 
-    return sum;
+    return sum.roundToPrecision(precision);
   }
 
   // Helper method for integer powers

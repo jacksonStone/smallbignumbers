@@ -168,3 +168,10 @@ assert.strictEqual(negativeDecimalNoZeros.toString(), "-0.9");
 
 const decimalNoZeros = new BigNumber(".9");
 assert.strictEqual(decimalNoZeros.toString(), "0.9");
+
+
+const one = new BigNumber("1");
+assert.strictEqual(one.toString(), "1");
+// now get exp 
+const exp = BigNumber.exp(one, 1000);
+assert.strictEqual(exp.toString(), trueE1000);
