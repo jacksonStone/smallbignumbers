@@ -136,7 +136,31 @@ export class BigNumber {
       .exp(multiplied, precision + 3) // Provide extra precision for exp to avoid compoundingrounding errors
       .roundToPrecision(precision);
   }
-
+  
+  static e(precision = 50) {
+    // 1) If our eCache is already at or above the requested precision, return it.
+    if (eCache.scale >= precision) {
+      return eCache.roundToPrecision(precision);
+    }
+  
+    // 2) We'll compute e = 2^(1/ln(2)) at a higher internal precision
+    const workingPrecision = precision + 10;
+  
+    // 3) Get 1/ln(2) at the working precision
+    const one = new BigNumber("1");
+    const two = new BigNumber("2");
+    const oneOverLn2 = one.divide(this.ln2(workingPrecision), workingPrecision);
+  
+    // 4) Raise 2 to that power
+    //    2^(1/ln(2)) = e
+    const eApprox = two.pow(oneOverLn2, workingPrecision);
+  
+    // 5) Update our cache if this is the highest precision we’ve computed
+    eCache = eApprox;
+  
+    // 6) Finally, return it rounded to the requested precision
+    return eApprox.roundToPrecision(precision);
+  }
   // Natural logarithm using Taylor series
   ln(precision = 20) {
     const internalPrecision = precision + 3;
@@ -185,87 +209,90 @@ export class BigNumber {
 
     return sum.roundToPrecision(precision);
   }
+
+  static factorial(n) {
+    // Naive factorial implementation using BigNumber
+    let result = new BigNumber("1");
+    for (let i = 1n; i <= n; i++) {
+      result = result.multiply(new BigNumber(i.toString()));
+    }
+    return result;
+  }
+  
   static pi(precision = 50) {
-    // If we already computed pi at or beyond this precision, reuse cache
     if (piCache.scale >= precision) {
       return piCache.roundToPrecision(precision);
     }
-    const workingPrecision = precision + 10; // extra digits
+    // We’ll compute pi using the Chudnovsky algorithm:
+    //    π = 426880 * sqrt(10005) / Σ (k=0..∞) [(-1)^k * (6k)! * (13591409 + 545140134k)]
+    //                                          -----------------------------------------
+    //                                          (3k)!(k!)^3 * 640320^(3k)
+    //
+    // We’ll keep adding terms until the next one is effectively zero at our working precision.
+  
+    // Increase internal precision slightly to help final rounding
+    const workingPrecision = precision + 5;
+  
+    const zero = new BigNumber("0");
     const one = new BigNumber("1");
-    const negOne = new BigNumber("-1");
-    const twelve = new BigNumber("12");
-
-    // Chudnovsky constants
-    const a = new BigNumber("13591409");
-    const b = new BigNumber("545140134");
-    // We use +640320 and rely on (-1)^k for sign flips
-    const c = new BigNumber("640320");
-
-    // sum = Σ_k [ (-1)^k * (6k)! * (13591409 + 545140134*k ) ]
-    //             / [ (3k)!(k!)^3 * (640320)^(3k + 1.5 ) ]
-    let sum = new BigNumber("0");
-
-    // Factorials we need for each k
-    let factorial6k = new BigNumber("1");  // (6*0)!
-    let factorial3k = new BigNumber("1");  // (3*0)!
-    let factorialk = new BigNumber("1");  // (k)!
-    let sign = new BigNumber("1");         // (-1)^k
-
-    // We'll track c^(3k) and multiply by sqrt(c) = c^(1/2)
-    let cPow3k = new BigNumber("1");        // c^(3*0)
-    const cPow3 = c.pow(new BigNumber("3"));  // for c^(3*(k+1)) each iteration
-    const cPowHalf = c.sqrt(workingPrecision); // c^(0.5), constant
-
-    // Roughly 14 digits of π per iteration
-    const iterations = Math.ceil(workingPrecision / 14) + 1;
-
-    for (let k = 0; k < iterations; k++) {
-      // numerator = (-1)^k * (6k)! * (a + b*k)
-      const kBN = new BigNumber(k.toString());
-      const numerator = sign
-        .multiply(factorial6k)
-        .multiply(a.add(b.multiply(kBN)));
-
-      // denominator = (3k)!(k!)^3 * c^(3k) * c^(1/2)
-      const denominator = factorial3k
-        .multiply(factorialk.pow(new BigNumber("3")))
-        .multiply(cPow3k)
-        .multiply(cPowHalf);
-
-      // Add the term to the sum
-      const term = numerator.divide(denominator, workingPrecision);
+    const minusOne = new BigNumber("-1");
+    let sum = zero;
+    let k = 0n;
+  
+    // Precompute BigNumber(640320) and BigNumber(13591409)
+    const C_640320 = new BigNumber("640320");
+    const C_13591409 = new BigNumber("13591409");
+    const C_545140134 = new BigNumber("545140134");
+    let loopCount = 0;
+    while (true) {
+      loopCount++;
+      // Compute (-1)^k
+      const sign = (k % 2n === 0n) ? one : minusOne;
+  
+      // (6k)!
+      const sixKFactorial = BigNumber.factorial(6n * k);
+  
+      // (3k)!
+      const threeKFactorial = BigNumber.factorial(3n * k);
+  
+      // (k!)^3
+      const kFactorial = BigNumber.factorial(k);
+      const kFactorial3 = kFactorial.multiply(kFactorial).multiply(kFactorial);
+  
+      // 13591409 + 545140134k
+      const linearTerm = C_13591409.add(C_545140134.multiply(new BigNumber(k.toString())));
+  
+      // 640320^(3k)
+      const denominatorPower = C_640320.pow(new BigNumber((3n * k).toString()));
+  
+      // term = [(-1)^k * (6k)! * (13591409 + 545140134k)] / [(3k)!(k!)^3 * 640320^(3k)]
+      let term = sixKFactorial
+        .multiply(linearTerm)
+        .multiply(sign)
+        .divide(threeKFactorial.multiply(kFactorial3).multiply(denominatorPower), workingPrecision);
+  
+      if (term.isZero()) {
+        // When the new term is effectively 0 at this precision, break
+        break;
+      }
+  
       sum = sum.add(term);
-
-      // Flip sign for next iteration
-      sign = sign.multiply(negOne);
-
-      // Update factorials for next k
-      // (6(k+1))! = (6k)! * (6k+1)*(6k+2)*(6k+3)*(6k+4)*(6k+5)*(6k+6)
-      for (let i = 6 * k + 1; i <= 6 * (k + 1); i++) {
-        factorial6k = factorial6k.multiply(new BigNumber(i.toString()));
-      }
-      // (3(k+1))! = (3k)! * (3k+1)*(3k+2)*(3k+3)
-      for (let i = 3 * k + 1; i <= 3 * (k + 1); i++) {
-        factorial3k = factorial3k.multiply(new BigNumber(i.toString()));
-      }
-      // (k+1)! = k! * (k+1)
-      factorialk = factorialk.multiply(new BigNumber((k + 1).toString()));
-
-      // c^(3(k+1)) = c^(3k) * c^3
-      cPow3k = cPow3k.multiply(cPow3);
+      k++;
     }
+    // Now compute pi:
+    // pi = 426880 * sqrt(10005) / sum
 
-    // According to Chudnovsky: 1/pi = 12 * sum(...)
-    // => pi = 1 / (12 * sum)
-    const denominator = sum.multiply(twelve);
-    const piValue = one.divide(denominator, workingPrecision);
+    const sqrt10005 = new BigNumber("10005").sqrt(workingPrecision);
+    const factor = new BigNumber("426880").multiply(sqrt10005);
 
-    // Update piCache if we got more precision than ever
-    if (piValue.scale > piCache.scale) {
-      piCache = piValue;
-    }
-    // Return π with the requested precision
-    return piValue.roundToPrecision(precision);
+    const piApprox = factor.divide(sum, workingPrecision);
+
+    const piApproxRounded = piApprox.roundToPrecision(precision);
+    // Cache this since it's newly most percise PI
+    piCache = piApproxRounded;
+    
+    
+    return piApproxRounded;
   }
 
   static ln2(precision = 50) {
@@ -384,8 +411,26 @@ export class BigNumber {
   }
 
   sqrt(precision = 20) {
-    return this.pow(new BigNumber("0.5"), precision);
-  }
+    if (this.value === 0n) return this;
+  
+    // Choose an initial guess: half of x or something simpler
+    let guess = this.divide(new BigNumber("2"), precision * 2);
+  
+    while (true) {
+      // newGuess = (guess + x/guess) / 2
+      const newGuess = guess.add(
+        this.divide(guess, precision * 2)
+      ).divide(new BigNumber("2"), precision * 2);
+  
+      // Check if they are the same at the desired precision
+      if (newGuess.compare(guess) === 0) {
+        // Round final to requested precision
+        return newGuess.roundToPrecision(precision);
+      }
+      guess = newGuess;
+    }
+  } 
 }
-let ln2Cache = new BigNumber("0.6931471805599453094172321214581765680755001343602552541206800094933936219696947156058633269964186875");
-let piCache = new BigNumber("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679");
+let eCache = new BigNumber("2.71828182845904523536028747135266249775724709369995");
+let ln2Cache = new BigNumber("0.693147180559945309417232121458176568075500134360");
+let piCache = new BigNumber("3.14159265358979323846264338327950288419716939937510");
