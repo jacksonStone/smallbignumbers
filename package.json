@@ -1,0 +1,12 @@
+{
+  "name": "smallbignumbers",
+  "version": "1.0.0",
+  "description": "Big Numbers - using BigInts",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node index.test.js"
+  },
+  "author": "jacksonastone",
+  "license": "MIT"
+}
