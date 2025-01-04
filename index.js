@@ -6,6 +6,9 @@ export class BigNumber {
       const [intPart, fracPart = ""] = value.split(".");
 
       // Scale is the length of the fractional part
+      // I considered making this a big int as well, however storing a number greater than MAX_SAFE_INTEGER will cause overflows for all systems in the forseeable future.
+      // as it will result in 9.007199254740991 Petabytes per number instance to represent the string. To operate on it usually requires some level of copying, so maybe requires
+      // a system with 20+ petabytes accessible to the JS runtime... If you have a server farm that large, you should not be using this library.
       this.scale = fracPart.length;
 
       // Combine integer part and fractional part into one string
@@ -34,15 +37,27 @@ export class BigNumber {
     }
 
     // Insert decimal point in the correct place from the right
-    const integerPartLength = strValue.length - this.scale;
+    let intPart = '';
+    let integerPartLength = strValue.length - this.scale;
     if (integerPartLength <= 0) {
       // Pad with leading zeros if fraction is longer than integer part
-      return "0." + strValue.padStart(this.scale, "0");
+      intPart = "0";
+      integerPartLength = 0;
     }
-
-    const intPart = strValue.slice(0, integerPartLength);
+    else if (integerPartLength === 1 && strValue[0] === "-") {
+      intPart = "-0";
+      integerPartLength = 1;
+    } else {
+      intPart = strValue.slice(0, integerPartLength);
+    }
     const fracPart = strValue.slice(integerPartLength);
-    return intPart + "." + fracPart;
+    // Trim trailing zeros from the fractional part
+    let i = fracPart.length - 1;
+    // Iterate backwards until we find a character that's not the trailing character
+    while (i >= 0 && fracPart[i] === "0") {
+      i--;
+    }
+    return intPart + "." + fracPart.slice(0, i + 1);
   }
 
   // Create an instance from a BigInt and a scale
@@ -90,12 +105,13 @@ export class BigNumber {
     const numerator = this.value * scaleFactor * BigInt("1" + "0".repeat(other.scale));
     const denominator = other.value * BigInt("1" + "0".repeat(this.scale));
 
-
     // Divide with one extra digit of precision
     const rawQuotient = (numerator * 10n) / denominator;
 
-    // Add 5 to the last digit and then divide by 10 to round
-    const roundedQuotient = (rawQuotient + 5n) / 10n;
+    // Add or subtract 5 based on sign for proper rounding
+    const roundedQuotient = rawQuotient >= 0n
+      ? (rawQuotient + 5n) / 10n
+      : (rawQuotient - 5n) / 10n;
 
     // The resulting scale is `precision` because we effectively multiplied by 10^precision
     return BigNumber.fromBigInt(roundedQuotient, precision);
@@ -162,7 +178,7 @@ export class BigNumber {
     return eApprox.roundToPrecision(precision);
   }
   // Natural logarithm using Taylor series
-  ln(precision = 20) {
+  ln(precision = 50) {
     const internalPrecision = precision + 3;
     if (this.value <= 0n) {
       throw new Error("Cannot calculate ln of negative number or zero");
@@ -410,7 +426,7 @@ export class BigNumber {
     return this.value === 0n;
   }
 
-  sqrt(precision = 20) {
+  sqrt(precision = 50) {
     if (this.value === 0n) return this;
   
     // Choose an initial guess: half of x or something simpler
@@ -431,6 +447,6 @@ export class BigNumber {
     }
   } 
 }
-let eCache = new BigNumber("2.71828182845904523536028747135266249775724709369995");
-let ln2Cache = new BigNumber("0.693147180559945309417232121458176568075500134360");
-let piCache = new BigNumber("3.14159265358979323846264338327950288419716939937510");
+let eCache = new BigNumber("2.7183");
+let ln2Cache = new BigNumber("0.6932");
+let piCache = new BigNumber("3.1416");

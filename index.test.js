@@ -38,7 +38,7 @@ const quotient = num1.divide(num2, 5); // up to 5 decimal places
 assert.strictEqual(quotient.toString(), '1.56471');
 
 
-const quotient2 = num1.divide(num2, 10); // up to 5 decimal places
+const quotient2 = num1.divide(num2, 10); // up to 10 decimal places
 assert.strictEqual(quotient2.toString(), '1.5647148289');
 
 const pow = num1.pow(new BigNumber('2'));
@@ -143,3 +143,28 @@ assert(timeE2 < timeE);
 
 
 
+const negativeDecimal = new BigNumber("-78.9");
+assert.strictEqual(negativeDecimal.toString(), "-78.9");
+
+const negativeDecimal2 = new BigNumber("-0.9");
+assert.strictEqual(negativeDecimal2.toString(), "-0.9");
+
+// Negative decimal with no integer part with addition
+assert.strictEqual(negativeDecimal2.add(new BigNumber("1")).toString(), "0.1");
+
+// Negative decimal with no integer part with subtraction
+assert.strictEqual(negativeDecimal2.subtract(new BigNumber("1")).toString(), "-1.9");
+
+// Negative decimal with no integer part with multiplication
+assert.strictEqual(negativeDecimal2.multiply(new BigNumber("2")).toString(), "-1.8");
+
+// Negative decimal with no integer part with division
+assert.strictEqual(negativeDecimal2.divide(new BigNumber("2")).toString(), "-0.45");
+
+
+const negativeDecimalNoZeros = new BigNumber("-.9");
+assert.strictEqual(negativeDecimalNoZeros.toString(), "-0.9");
+
+
+const decimalNoZeros = new BigNumber(".9");
+assert.strictEqual(decimalNoZeros.toString(), "0.9");
